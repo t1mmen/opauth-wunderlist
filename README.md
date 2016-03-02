@@ -1,4 +1,4 @@
-Opauth-Timely
+Opauth-Wunderlist
 =============
 [Opauth][1] strategy for Wunderlist authentication.
 
@@ -19,7 +19,7 @@ Getting started
    ```bash
    {
        "require": {
-           "t1mmen/opauth-timely": "*"
+           "t1mmen/opauth-wunderlist": "*"
        }
    }
    ```
