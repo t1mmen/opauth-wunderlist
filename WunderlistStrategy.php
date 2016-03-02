@@ -8,15 +8,15 @@
  *
  * @copyright    Copyright © 2015 Timm Stokke (http://timm.stokke.me)
  * @link         http://opauth.org
- * @package      Opauth.BasecampStrategy
+ * @package      Opauth.WunderlistStrategy
  * @license      MIT License
  */
 
 
 /**
- * Slack strategy for Opauth
+ * Wunderlist strategy for Opauth
  *
- * @package			Opauth.Slack
+ * @package			Opauth.Wunderlist
  */
 class WunderlistStrategy extends OpauthStrategy {
 
@@ -42,11 +42,12 @@ class WunderlistStrategy extends OpauthStrategy {
 	 * Auth request
 	 */
 	public function request() {
-		$url = 'https://api.timelyapp.com/1.0/oauth/authorize';
+		$url = 'https://www.wunderlist.com/oauth/authorize';
 		$params = array(
 			'response_type' => 'code',
 			'client_id' => $this->strategy['client_id'],
-			'redirect_uri' => $this->strategy['redirect_uri']
+			'redirect_uri' => $this->strategy['redirect_uri'],
+			'state' => md5('random-client-id'.$this->strategy['client_id'])
 		);
 
 		foreach ($this->optionals as $key) {
@@ -62,13 +63,14 @@ class WunderlistStrategy extends OpauthStrategy {
 	public function oauth2callback() {
 		if (array_key_exists('code', $_GET) && !empty($_GET['code'])) {
 			$code = $_GET['code'];
-			$url = 'https://api.timelyapp.com/1.0/oauth/token';
+			$url = 'https://www.wunderlist.com/oauth/access_token';
 
 			$params = array(
 				'code' => $code,
 				'client_id' => $this->strategy['client_id'],
 				'client_secret' => $this->strategy['client_secret'],
 				'grant_type' => 'authorization_code',
+				'state' => md5('random-client-id'.$this->strategy['client_id'])
 			);
 
 			if (!empty($this->strategy['state'])) $params['state'] = $this->strategy['state'];
@@ -81,20 +83,17 @@ class WunderlistStrategy extends OpauthStrategy {
 				$user = $this->user($results['access_token']);
 
 				$this->auth = array(
-					'uid' => $user['basics']['user_id'],
-					'info' => array(),
+					'uid' => $user['id'],
+					'info' => array(
+						'name' => $user['name'],
+						'email' => $user['email'],
+					),
 					'credentials' => array(
 						'token' => $results['access_token']
 					),
 					'raw' => $user
 				);
 
-				$this->mapProfile($user, 'user.real_name', 'info.name');
-				$this->mapProfile($user, 'user.name', 'info.nickname');
-				$this->mapProfile($user, 'user.profile.first_name', 'info.first_name');
-				$this->mapProfile($user, 'user.profile.last_name', 'info.last_name');
-				$this->mapProfile($user, 'user.profile.email', 'info.email');
-				$this->mapProfile($user, 'user.profile.image_48', 'info.image');
 
 				$this->callback();
 			}
@@ -122,29 +121,28 @@ class WunderlistStrategy extends OpauthStrategy {
 	}
 
 	/**
-	 * Queries Slack API for user info
+	 * Queries Wunderlist API for user info
 	 *
 	 * @param string $access_token
 	 * @return array Parsed JSON results
 	 */
+
 	private function user($access_token) {
-		$user = $this->serverGet('https://slack.com/api/auth.test', array('token' => $access_token), null, $headers);
 
-		if (!empty($user)) {
-			$basics = $this->recursiveGetObjectVars(json_decode($user));
+		$options['http']['header'] = "Content-Type: application/json";
+		$options['http']['header'] .= "\r\nAccept: application/json";
+		$options['http']['header'] .= "\r\nX-Access-Token: ".$access_token;
+		$options['http']['header'] .= "\r\nX-Client-ID: ".$this->strategy['client_id'];
 
-			// Get detailed info:
-			$getDetails = $this->serverGet('https://slack.com/api/users.info', array('token' => $access_token, 'user' => $basics['user_id']), null, $headers);
-			$details = $this->recursiveGetObjectVars(json_decode($getDetails));
+		$accountDetails = $this->serverGet('https://a.wunderlist.com/api/v1/user', array(), $options);
 
-			$details['basics'] = $basics;
-
-			return $details;
+		if (!empty($accountDetails)) {
+			return $this->recursiveGetObjectVars(json_decode($accountDetails,true));
 		}
 		else {
 			$error = array(
 				'code' => 'userinfo_error',
-				'message' => 'Failed when attempting to query Slack API for user information',
+				'message' => 'Failed when attempting to query Wunderlist API for user information',
 				'raw' => array(
 					'response' => $user,
 					'headers' => $headers
@@ -154,4 +152,5 @@ class WunderlistStrategy extends OpauthStrategy {
 			$this->errorCallback($error);
 		}
 	}
+
 }
